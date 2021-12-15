@@ -9,7 +9,16 @@
 #include <cstdint>	//	uint8_t
 #include <vector>
 #include <deque>
+#include <iostream>
 using namespace std;
+
+//	оператор вывода для vector
+template <class T>
+ostream& operator << (ostream& os, const vector<T>& s);
+
+//	оператор вывода для deque
+template <class T>
+ostream& operator << (ostream& os, const deque<T>& s);
 
 using u_int = unsigned int;
 
@@ -39,7 +48,6 @@ private:
     	return pthread_cond_broadcast(&CondVar);
     };
 public:
-    MutexAndCondvar() { init_class(); };
     virtual ~MutexAndCondvar(){ destroy_class(); };
     int MutexLock(void) {
     	return pthread_mutex_lock(&Mutex);
@@ -58,37 +66,47 @@ public:
  //───────────────────────────────────────────────────────────────────────────────────────────────
 class Queue {
 public:
-    deque <vector<uint8_t>> messQueue;
-public:
-    //────────────────────────────────────────── Конструктор ─────────────────────────────────────
-    Queue() {}
-    Queue(uint8_t size);
     //────────────────────────────────────────── Деструктор ──────────────────────────────────────
     virtual ~Queue();
     //───────────────────────────────────── Запись в очередь ───────────────────────────────
-    void write(const vector<uint8_t>& data);
+    void write_end(const vector<uint8_t>& data);
+    void write_begin(const vector<uint8_t>& data);
     //──────────────────────────────────── Чтение из очереди ──────────────────────────────
     vector<uint8_t> read(uint8_t read_index);
+    //──────────────────────────────────────── Изменение эл-та очереди  ─────────────────────────────
+    vector<uint8_t> change_el(uint8_t index, const vector<uint8_t>& val);
+    //──────────────────────────────────────── Определение размера очереди  ─────────────────────────────
+    uint8_t get_queue_size(void);
     //────────────────────── Удаление сообщения из очереди ────────────────────────
-    void erase(void);
+    void erase_begin(void);
+    void erase_end(void);
     //─────────────────────────────────────  Очистка очереди ─────────────────────────────────────
     void clear(void);
+
+    //───────────────────────────────────── Доступ к очереди ─────────────────────────────────────
+    deque <vector<uint8_t>> getQueue(void);
+private:
+    deque <vector<uint8_t>> messQueue;
 };
 
 // очередь с блокировкой
 class QueueBlock : public Queue, protected MutexAndCondvar {
 	friend class QueueMutex;
 public:
-    //────────────────────────────────────────── Конструктор ─────────────────────────────────────
-    QueueBlock(u_int size): Queue(size) {};
     //──────────────────────────────────────── Деструктор ────────────────────────────────────────
     virtual ~QueueBlock(){};
     //───────────────────────────────────── Запись в очередь ───────────────────────────────
-    void write(const vector<uint8_t>& data);
+    void write_end(const vector<uint8_t>& data);
+    void write_begin(const vector<uint8_t>& data);
     //──────────────────────────────────── Чтение из очереди ──────────────────────────────
     vector<uint8_t> read(uint8_t read_index);
+    //──────────────────────────────────────── Изменение эл-та очереди  ─────────────────────────────
+    vector<uint8_t> change_el(uint8_t index, const vector<uint8_t>& val);
+    //──────────────────────────────────────── Определение размера очереди  ─────────────────────────────
+    uint8_t get_queue_size(void);
     //────────────────────── Удаление сообщения из очереди ────────────────────────
-    void erase(void);
+    void erase_begin(void);
+    void erase_end(void);
     //─────────────────────────────────────  Очистка очереди ─────────────────────────────────────
     void clear(void);
 };
@@ -97,8 +115,8 @@ public:
 // и разблокирование при выходе из функции (автоматически вызывается деструктор)
 class QueueMutex {
 public:
-	QueueMutex(QueueBlock *q): queue(q){ queue->MutexLock(); }
-	~QueueMutex(){queue->MutexUnlock(); }
+	QueueMutex(QueueBlock *q): queue(q) {queue->MutexLock();}
+	~QueueMutex() {queue->MutexUnlock();}
 private:
 	QueueBlock *queue;
 };
