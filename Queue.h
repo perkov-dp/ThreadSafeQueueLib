@@ -23,6 +23,21 @@ ostream& operator << (ostream& os, const deque<T>& s);
 using u_int = unsigned int;
 
 class MutexAndCondvar {
+public:
+	MutexAndCondvar() { init_class(); };
+    virtual ~MutexAndCondvar(){ destroy_class(); };
+    int MutexLock(void) {
+    	return pthread_mutex_lock(&Mutex);
+    };
+    int MutexUnlock(void) {
+    	return pthread_mutex_unlock(&Mutex);
+    };
+    int CondvarWait(void) {
+    	return pthread_cond_wait(&CondVar, &Mutex);
+    };
+    int CondvarSignal(void) {
+    	return pthread_cond_signal(&CondVar);
+    };
 private:
 	pthread_mutex_t Mutex;
 	pthread_cond_t  CondVar;
@@ -46,20 +61,6 @@ private:
     };
     int CondvarBroadcast(void) {
     	return pthread_cond_broadcast(&CondVar);
-    };
-public:
-    virtual ~MutexAndCondvar(){ destroy_class(); };
-    int MutexLock(void) {
-    	return pthread_mutex_lock(&Mutex);
-    };
-    int MutexUnlock(void) {
-    	return pthread_mutex_unlock(&Mutex);
-    };
-    int CondvarWait(void) {
-    	return pthread_cond_wait(&CondVar, &Mutex);
-    };
-    int CondvarSignal(void) {
-    	return pthread_cond_signal(&CondVar);
     };
 };
 
@@ -94,7 +95,7 @@ class QueueBlock : public Queue, protected MutexAndCondvar {
 	friend class QueueMutex;
 public:
     //──────────────────────────────────────── Деструктор ────────────────────────────────────────
-    virtual ~QueueBlock(){};
+    ~QueueBlock();
     //───────────────────────────────────── Запись в очередь ───────────────────────────────
     void write_end(const vector<uint8_t>& data);
     void write_begin(const vector<uint8_t>& data);

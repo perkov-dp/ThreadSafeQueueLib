@@ -103,6 +103,10 @@ deque <vector<uint8_t>> Queue::getQueue(void) {
 	return messQueue;
 }
 
+//─────────────────────────────────────────── Деструктор ─────────────────────────────────────────
+QueueBlock::~QueueBlock() {
+	clear();
+};
 
 //──────────────────────────────────── Метод записи в конец очереди ────────────────────────────────────
 void QueueBlock::write_end(const vector<uint8_t>& data) {
