@@ -1,56 +1,40 @@
 #include "Queue.h"
-#include <stdexcept>
-
-//	оператор вывода для vector
-template <class T>
-ostream& operator << (ostream& os, const vector<T>& s) {
-	os << "{";
-	bool first = true;	//	вывод запятой только после первого эл-та
-	for (const auto& x : s) {
-		if (!first) {
-			os << ", ";
-		}
-		first = false;
-		os << static_cast<int>(x);
-	}
-	return os << "}";
-}
-
-//	оператор вывода для deque
-template <class T>
-ostream& operator << (ostream& os, const deque<T>& s) {
-	os << "{";
-	bool first = true;	//	вывод запятой только после первого эл-та
-	for (const auto& x : s) {
-		if (!first) {
-			os << ", ";
-		}
-		first = false;
-		os << x;
-	}
-	return os << "}";
-}
-
-//─────────────────────────────────────────── Деструктор ─────────────────────────────────────────
-Queue::~Queue() {
-	clear();
-};
 
 //──────────────────────────────────────── Метод записи в конец очереди ────────────────────────────────
 void Queue::write_end(const vector<uint8_t>& data) {
+	// Отныне текущий поток единственный, который имеет доступ к rawQueue
+	std::unique_lock<std::mutex> lg(m);
+
 	messQueue.push_back(data);			// добавление в конец
 	messQueue.back().shrink_to_fit();	//	подогнать размер строки под фактический размер
 	messQueue.shrink_to_fit();			//	подогнать всю очередь под фактический размер
+
+	//	оповещаем о добавлении нового элемента -> очередь непустая
+	cv.notify_all();
 };
 //──────────────────────────────────────── Метод записи в начало очереди ────────────────────────────────
 void Queue::write_begin(const vector<uint8_t>& data) {
+	// Отныне текущий поток единственный, который имеет доступ к rawQueue
+	std::unique_lock<std::mutex> lg(m);
+
 	messQueue.push_front(data);			// добавление в начало
 	messQueue.front().shrink_to_fit();	//	подогнать размер строки под фактический размер
 	messQueue.shrink_to_fit();			//	подогнать всю очередь под фактический размер
+
+	//	оповещаем о добавлении нового элемента -> очередь непустая
+	cv.notify_all();
 };
 
 //──────────────────────────────────────── Чтение из очереди  ─────────────────────────────
 vector<uint8_t> Queue::read(uint8_t read_index) {
+	// Отныне текущий поток единственный, который имеет доступ к rawQueue
+	std::unique_lock<std::mutex> lg(m);
+
+	//	пока очередь пустая -> ждем добавления элемента
+	while(!getQueue().size()) {
+		cv.wait(lg);
+	}
+
     try {
     	//	безопасное обращение по индексу
         return messQueue.at(read_index);
@@ -62,6 +46,14 @@ vector<uint8_t> Queue::read(uint8_t read_index) {
 
 //──────────────────────────────────────── Изменение эл-та очереди  ─────────────────────────────
 vector<uint8_t> Queue::change_el(uint8_t index, const vector<uint8_t>& val) {
+	// Отныне текущий поток единственный, который имеет доступ к rawQueue
+	std::unique_lock<std::mutex> lg(m);
+
+	//	пока очередь пустая -> ждем добавления элемента
+	while(!getQueue().size()) {
+		cv.wait(lg);
+	}
+
     try {
     	//	безопасное обращение по индексу
         messQueue.at(index) = val;
@@ -73,18 +65,27 @@ vector<uint8_t> Queue::change_el(uint8_t index, const vector<uint8_t>& val) {
 }
 
 //──────────────────────────────────────── Определение размера очереди  ─────────────────────────────
-uint8_t Queue::get_queue_size(void) {
+uint8_t Queue::get_queue_size() {
+	// Отныне текущий поток единственный, который имеет доступ к rawQueue
+	std::unique_lock<std::mutex> lg(m);
+
 	return messQueue.size();
 }
 
 //──────────────────────────── Удаление самого старого сообщения из очереди ──────────────────────
-void Queue::erase_begin(void) {
+void Queue::erase_begin() {
+	// Отныне текущий поток единственный, который имеет доступ к rawQueue
+	std::unique_lock<std::mutex> lg(m);
+
 	if (!messQueue.empty()) {
 		messQueue.pop_front();
 	}
 };
 //──────────────────────────── Удаление самого нового сообщения из очереди ──────────────────────
-void Queue::erase_end(void) {
+void Queue::erase_end() {
+	// Отныне текущий поток единственный, который имеет доступ к rawQueue
+	std::unique_lock<std::mutex> lg(m);
+
 	if (!messQueue.empty()) {
 		messQueue.pop_back();
 	}
@@ -93,72 +94,19 @@ void Queue::erase_end(void) {
 
 //──────────────────────────────────────────  Очистка очереди ────────────────────────────────────
 void Queue::clear(void) {
+	// Отныне текущий поток единственный, который имеет доступ к rawQueue
+	std::unique_lock<std::mutex> lg(m);
+
 	while(!messQueue.empty()) {
 		messQueue.erase(messQueue.begin());
 	}
 };
 
 //───────────────────────────────────── Доступ к очереди ─────────────────────────────────────
-deque <vector<uint8_t>> Queue::getQueue(void) {
+deque<vector<uint8_t>> Queue::getQueue(void) {
+	// Отныне текущий поток единственный, который имеет доступ к rawQueue
+	std::unique_lock<std::mutex> lg(m);
+
 	return messQueue;
 }
-
-//─────────────────────────────────────────── Деструктор ─────────────────────────────────────────
-QueueBlock::~QueueBlock() {
-	clear();
-};
-
-//──────────────────────────────────── Метод записи в конец очереди ────────────────────────────────────
-void QueueBlock::write_end(const vector<uint8_t>& data) {
-	QueueMutex mutex(this);
-	Queue::write_end(data);
-	CondvarSignal();
-};
-//──────────────────────────────────── Метод записи в начало очереди ────────────────────────────────────
-void QueueBlock::write_begin(const vector<uint8_t>& data) {
-	QueueMutex mutex(this);
-	Queue::write_begin(data);
-	CondvarSignal();
-};
-
-//──────────────────────────────────────── Чтение из очереди  ─────────────────────────────
-vector<uint8_t> QueueBlock::read(uint8_t read_index) {
-	QueueMutex mutex(this);
-	while(!Queue::getQueue().size()) {
-		CondvarWait();
-	}
-
-	return Queue::read(read_index);
-};
-
-//──────────────────────────────────────── Изменение эл-та очереди  ─────────────────────────────
-vector<uint8_t> QueueBlock::change_el(uint8_t index, const vector<uint8_t>& val) {
-	QueueMutex mutex(this);
-	return Queue::change_el(index, val);
-}
-
-//──────────────────────────────────────── Определение размера очереди  ─────────────────────────────
-uint8_t QueueBlock::get_queue_size(void) {
-	QueueMutex mutex(this);
-	return Queue::get_queue_size();
-}
-
-//───────────────────────── Удаление сообщения из очереди ─────────────────────────
-void QueueBlock::erase_begin(void) {
-	QueueMutex mutex(this);
-	Queue::erase_begin();
-};
-//───────────────────────── Удаление сообщения из очереди ─────────────────────────
-void QueueBlock::erase_end(void) {
-	QueueMutex mutex(this);
-	Queue::erase_end();
-};
-
-
-//────────────────────────────────────────  Очистка очереди ──────────────────────────────────────
-void QueueBlock::clear(void) {
-	QueueMutex mutex(this);
-	Queue::clear();
-};
-
 
